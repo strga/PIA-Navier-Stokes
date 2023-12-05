@@ -4,7 +4,7 @@ This repository contains an implementation of the Semi-Implicit Method for Press
 
 The lid-driven cavity problem is a classic test case for CFD algorithms. It involves fluid within a square cavity, set in motion by a moving lid, creating complex fluid flows. This repository offers a C++ implementation of the SIMPLE algorithm to solve the Navier-Stokes equations for this scenario. Additionally, there is a Python script provided for visualizing the results via contour plots. The implementation of the SIMPLE algorithm for the Finite Volume Method (FVM) is based on the following sources:
 
-- [Math Online](https://mathonline.fme.vutbr.cz/download)
+- [Math Online](https://mathonline.fme.vutbr.cz/download.aspx?id_file=1305)
 - [University of Sydney Digital Repository](https://ses.library.usyd.edu.au/handle/2123/376)
 
 **Content:**
