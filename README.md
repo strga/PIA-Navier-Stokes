@@ -1,3 +1,5 @@
+# Navier-Stokes equations - Lid Driven Cavity
+
 This repository contains an implementation of the Semi-Implicit Method for Pressure-Linked Equations (SIMPLE) algorithm for solving the lid-driven cavity problem in computational fluid dynamics (CFD). It includes both the C++ code for simulation and a Python script for generating contour plots of the velocity fields.
 
 **Overview:**
