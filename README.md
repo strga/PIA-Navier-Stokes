@@ -1,14 +1,14 @@
-# PIA-Navier-Stokes
+This repository contains an implementation of the Semi-Implicit Method for Pressure-Linked Equations (SIMPLE) algorithm for solving the lid-driven cavity problem in computational fluid dynamics (CFD). It includes both the C++ code for simulation and a Python script for generating contour plots of the velocity fields.
 
-This repository contains the implementation of the Semi-Implicit Method for Pressure-Linked Equations (SIMPLE) algorithm for solving the lid-driven cavity problem in computational fluid dynamics (CFD). The repository includes both the C++ code for the simulation and the Python script for generating contour plots of the velocity fields.
+**Overview:**
 
-**Overview**:
+The lid-driven cavity problem is a classic test case for CFD algorithms. It involves fluid within a square cavity, set in motion by a moving lid, creating complex fluid flows. This repository offers a C++ implementation of the SIMPLE algorithm to solve the Navier-Stokes equations for this scenario. Additionally, there is a Python script provided for visualizing the results via contour plots. The implementation of the SIMPLE algorithm for the Finite Volume Method (FVM) is based on the following sources:
 
-The lid-driven cavity problem is a well-known test case for CFD algorithms. It involves fluid contained in a square cavity with a moving lid, which creates complex internal fluid flows. This repository provides a C++ implementation of the SIMPLE algorithm to solve the Navier-Stokes equations for this problem. Additionally, a Python script is included for visualizing the results through contour plots.
+- [Math Online](https://mathonline.fme.vutbr.cz/download)
+- [University of Sydney Digital Repository](https://ses.library.usyd.edu.au/handle/2123/376)
 
+**Content:**
 
-**Content**:
-
-Simulation.cpp: C++ code implementing the SIMPLE algorithm for the lid-driven cavity problem. It calculates the velocity and pressure fields within the cavity.
-plot_contours.py: Python script for generating contour plots from the C++ simulation output. It visualizes the u and v velocity components.
-u_data.csv and v_data.csv: Example output files from the C++ simulation, used by the Python script for plotting.
+Simulation.cpp: This C++ code implements the SIMPLE algorithm for the lid-driven cavity problem, calculating the velocity and pressure fields within the cavity.
+plot_contours.py: A Python script used for generating contour plots from the C++ simulation output. It visualizes the components of velocity, u and v.
+u_data.csv and v_data.csv: These are example output files from the C++ simulation that the Python script uses for plotting.
