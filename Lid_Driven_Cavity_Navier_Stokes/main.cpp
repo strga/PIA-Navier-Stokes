@@ -3,6 +3,16 @@
 #include <limits>
 #include "Simulation.h"
 
+/*
+
+mkdir build
+cd build
+cmake ..
+make
+./Lid_Driven_Cavity_Navier_Stokes
+
+*/
+
 int main() {
 
     int N;
