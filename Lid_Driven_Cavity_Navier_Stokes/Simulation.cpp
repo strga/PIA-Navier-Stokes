@@ -13,7 +13,7 @@ void runSimulation(int N, double domainLength, double kinematicViscosity)
 {
     // Constants for the simulation
     const double dh = domainLength / (N - 1); // Grid spacing
-    const double URF = 0.7;                  // nder-relaxation factor for velocities
+    const double URF = 0.7;                  // Under-relaxation factor for velocities
     const double URF_p = 0.3;                // Under-relaxation factor for pressure
     const double nu = kinematicViscosity;    // Kinematic viscosity
 
