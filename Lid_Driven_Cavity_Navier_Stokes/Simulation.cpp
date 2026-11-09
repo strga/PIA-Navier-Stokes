@@ -1,5 +1,7 @@
 #include <iostream>
 #include <vector>
+#include <cmath>
+#include <utility>
 #include <omp.h>
 
 #include "Simulation.h"
@@ -11,8 +13,8 @@ void runSimulation(int N, double domainLength, double kinematicViscosity)
 {
     // Constants for the simulation
     const double dh = domainLength / (N - 1); // Grid spacing
-    const double URF = 0.8;                  // Under-relaxation factor for velocities
-    const double URF_p = 0.8;                // Under-relaxation factor for pressure
+    const double URF = 0.7;                  // nder-relaxation factor for velocities
+    const double URF_p = 0.3;                // Under-relaxation factor for pressure
     const double nu = kinematicViscosity;    // Kinematic viscosity
 
     // Initialize matrices for simulation variables
@@ -21,7 +23,6 @@ void runSimulation(int N, double domainLength, double kinematicViscosity)
     p(N + 1, vector<double>(N + 1, 1.0)), // Pressure
     u_stag(N + 1, vector<double>(N, 0.0)), // Staggered grid for u
     v_stag(N, vector<double>(N + 1, 0.0)), // Staggered grid for v
-    p_stag(N + 1, vector<double>(N + 1, 1.0)), // Staggered grid for p
     pc(N + 1, vector<double>(N + 1, 0.0)), // Pressure correction
     p_new(N + 1, vector<double>(N + 1, 1.0)), // New pressure values
     u_new(N + 1, vector<double>(N, 0.0)), // New u values
@@ -36,24 +37,16 @@ void runSimulation(int N, double domainLength, double kinematicViscosity)
     double err = 1.0; // Error for convergence
     int iter = 0;     // Iteration counter
 
-    // Setting the initial values for u_final
+    // Initialize top lid moving velocity (in both buffers, since u and u_new are swapped each iteration)
     for (int j = 0; j < N; ++j) {
         u_final[0][j] = 1.0;
-    }
-
-    // Setting the initial values for u_final
-    for (int j = 0; j < N; ++j) {
         u_new[0][j] = 1.0;
-    }
-
-    // Initialize top lid moving velocity
-    for (int j = 0; j < N; ++j) {
-        u[0][j] = 2.0;
+        u[0][j] = 1.0;
     }
 
     do {
-        // Parallelize X-momentum equation calculations
-#pragma omp parallel for collapse(2) default(none) shared(u, v, p, u_stag, d_e, N, dh, nu)
+        // X-momentum: each (i,j) writes only its own cell and reads old u, v, p -> no races
+#pragma omp parallel for collapse(2)
         for (int i = 1; i < N; ++i) {
             for (int j = 1; j < N - 1; ++j) {
                 double u_e = 0.5 * (u[i][j] + u[i][j + 1]);
@@ -70,28 +63,27 @@ void runSimulation(int N, double domainLength, double kinematicViscosity)
                 double A_e = -dh;
                 d_e[i][j] = A_e / a_e;
 
-                //staggered speed on control volume
                 u_stag[i][j] = (a_E * u[i][j + 1] + a_W * u[i][j - 1] + a_N * u[i - 1][j] + a_S * u[i + 1][j]) / a_e + d_e[i][j] * (p[i][j + 1] - p[i][j]);
             }
         }
 
-        // Set boundary conditions for u_stag
+        // Boundary conditions for u_stag (O(N), left serial)
         for (int j = 0; j < N; ++j) {
-            u_stag[0][j] = 2.0 - u_stag[1][j];
-            u_stag[N][j] = -u_stag[N - 1][j];
+            u_stag[0][j] = 1.0 - u_stag[1][j]; //top
+            u_stag[N][j] = -u_stag[N - 1][j]; //bottom
         }
         for (int i = 1; i < N; ++i) {
-            u_stag[i][0] = 0;
-            u_stag[i][N - 1] = 0;
+            u_stag[i][0] = 0; //left
+            u_stag[i][N - 1] = 0; //right
         }
 
-        // Parallelize Y-momentum equation calculations
-#pragma omp parallel for collapse(2) default(none) shared(u, v, p, v_stag, d_n, N, dh, nu)
-        for (int i = 1; i < N-1; ++i) {
+        // Y-momentum
+#pragma omp parallel for collapse(2)
+        for (int i = 1; i < N - 1; ++i) {
             for (int j = 1; j < N; ++j) {
                 double u_e = 0.5 * (u[i][j] + u[i + 1][j]);
                 double u_w = 0.5 * (u[i][j - 1] + u[i + 1][j - 1]);
-                double v_n = 0.5 * (v[i-1][j] + v[i][j]);
+                double v_n = 0.5 * (v[i - 1][j] + v[i][j]);
                 double v_s = 0.5 * (v[i][j] + v[i + 1][j]);
 
                 double a_E = -0.5 * u_e * dh + nu;
@@ -103,49 +95,60 @@ void runSimulation(int N, double domainLength, double kinematicViscosity)
                 double A_n = -dh;
                 d_n[i][j] = A_n / a_n;
 
-                //staggered speed on control volume
                 v_stag[i][j] = (a_E * v[i][j + 1] + a_W * v[i][j - 1] + a_N * v[i - 1][j] + a_S * v[i + 1][j]) / a_n + d_n[i][j] * (p[i][j] - p[i + 1][j]);
             }
         }
 
-        // Set boundary conditions for v_stag
+        // Boundary conditions for v_stag
         for (int i = 0; i < N; ++i) {
-            v_stag[i][0] = -v_stag[i][1];
-            v_stag[i][N] = -v_stag[i][N-1];
+            v_stag[i][0] = -v_stag[i][1]; //left
+            v_stag[i][N] = -v_stag[i][N - 1]; //right
         }
         for (int j = 1; j < N - 1; ++j) {
-            v_stag[0][j] = 0;
-            v_stag[N-1][j] = 0;
+            v_stag[0][j] = 0; //top
+            v_stag[N - 1][j] = 0; //bottom
         }
 
-        // Parallelize pressure correction calculations
-#pragma omp parallel for default(none) shared(pc, N)
+        // Reset pressure correction
+#pragma omp parallel for
         for (int i = 0; i <= N; ++i) {
             std::fill(pc[i].begin(), pc[i].end(), 0.0);
         }
 
-        // Continuity equation and pressure correction
+        // Continuity imbalance (source term), computed once and in parallel
+#pragma omp parallel for collapse(2)
         for (int i = 1; i < N; ++i) {
             for (int j = 1; j < N; ++j) {
-                double a_E = -d_e[i][j] * dh;
-                double a_W = -d_e[i][j - 1] * dh;
-                double a_N = -d_n[i - 1][j] * dh;
-                double a_S = -d_n[i][j] * dh;
-                double a_P = a_E + a_W + a_N + a_S;
                 b[i][j] = -(u_stag[i][j] - u_stag[i][j - 1]) * dh + (v_stag[i][j] - v_stag[i - 1][j]) * dh;
-
-                pc[i][j] = (a_E * pc[i][j + 1] + a_W * pc[i][j - 1] + a_N * pc[i - 1][j] + a_S * pc[i + 1][j] + b[i][j]) / a_P;
             }
         }
 
-        // Correcting the pressure field and velocities
+        // Pressure correction: red-black Gauss-Seidel sweep
+        for (int colour = 0; colour < 2; ++colour) {
+#pragma omp parallel for
+            for (int i = 1; i < N; ++i) {
+                int jStart = 1 + ((i + 1 + colour) % 2);
+                for (int j = jStart; j < N; j += 2) {
+                    double a_E = -d_e[i][j] * dh;
+                    double a_W = -d_e[i][j - 1] * dh;
+                    double a_N = -d_n[i - 1][j] * dh;
+                    double a_S = -d_n[i][j] * dh;
+                    double a_P = a_E + a_W + a_N + a_S;
+
+                    pc[i][j] = (a_E * pc[i][j + 1] + a_W * pc[i][j - 1] + a_N * pc[i - 1][j] + a_S * pc[i + 1][j] + b[i][j]) / a_P;
+                }
+            }
+        }
+
+        // Correct the pressure field
+#pragma omp parallel for collapse(2)
         for (int i = 1; i < N; ++i) {
             for (int j = 1; j < N; ++j) {
                 p_new[i][j] = p[i][j] + URF_p * pc[i][j];
             }
         }
 
-        // Set boundary conditions for pressure
+        // Boundary conditions for pressure
         for (int j = 0; j <= N; ++j) {
             p_new[0][j] = p_new[1][j];
             p_new[N][j] = p_new[N - 1][j];
@@ -155,16 +158,17 @@ void runSimulation(int N, double domainLength, double kinematicViscosity)
             p_new[i][N] = p_new[i][N - 1];
         }
 
-        // Correct the velocities using pressure correction - adjustment of speed based on pressure field
+        // Correct u with the pressure correction
+#pragma omp parallel for collapse(2)
         for (int i = 1; i < N; ++i) {
             for (int j = 1; j < N - 1; ++j) {
                 u_new[i][j] = u_stag[i][j] + URF * d_e[i][j] * (pc[i][j + 1] - pc[i][j]);
             }
         }
 
-        // Applying boundary conditions for the corrected velocities
+        // Boundary conditions for corrected u
         for (int j = 0; j < N; ++j) {
-            u_new[0][j] = 2.0 - u_new[1][j];
+            u_new[0][j] = 1.0 - u_new[1][j];
             u_new[N][j] = -u_new[N - 1][j];
         }
         for (int i = 1; i < N - 1; ++i) {
@@ -172,14 +176,15 @@ void runSimulation(int N, double domainLength, double kinematicViscosity)
             u_new[i][N - 1] = 0;
         }
 
-        // Correct the velocities using pressure correction - adjustment of speed based on pressure field
+        // Correct v with the pressure correction
+#pragma omp parallel for collapse(2)
         for (int i = 1; i < N - 1; ++i) {
             for (int j = 1; j < N; ++j) {
                 v_new[i][j] = v_stag[i][j] + URF * d_n[i][j] * (pc[i][j] - pc[i + 1][j]);
             }
         }
 
-        // Applying boundary conditions for the corrected velocities
+        // Boundary conditions for corrected v
         for (int i = 0; i < N; ++i) {
             v_new[i][0] = -v_new[i][1];
             v_new[i][N] = -v_new[i][N - 1];
@@ -189,24 +194,26 @@ void runSimulation(int N, double domainLength, double kinematicViscosity)
             v_new[N - 1][j] = 0;
         }
 
-        // Update error value from residual term 'b'
+        // Residual from the continuity imbalance
         err = 0;
-#pragma omp parallel for reduction(+:err) default(none) shared(b, N)
+#pragma omp parallel for collapse(2) reduction(+:err)
         for (int i = 1; i < N; ++i) {
             for (int j = 1; j < N; ++j) {
-                err += abs(b[i][j]);
+                err += std::abs(b[i][j]);
             }
         }
 
-        // Update variables for the next iteration
-        u = u_new;
-        v = v_new;
-        p = p_new;
+        std::swap(u, u_new);
+        std::swap(v, v_new);
+        std::swap(p, p_new);
         ++iter;
 
     } while (err > 1e-6);
 
+    cout << "Iterations: " << iter << endl;
+
     // Mapping staggered variables to collocated variables
+#pragma omp parallel for collapse(2)
     for (int i = 0; i < N; ++i) {
         for (int j = 0; j < N; ++j) {
             u_final[i][j] = 0.5 * (u[i][j] + u[i + 1][j]);
@@ -215,7 +222,7 @@ void runSimulation(int N, double domainLength, double kinematicViscosity)
         }
     }
 
-    // Write final data to .csv files
+    // Write final data to .csv
     if (!u_final.empty() && !u_final[0].empty()) {
         writeDataToFile(u_final, "u_data.csv");
     } else {
